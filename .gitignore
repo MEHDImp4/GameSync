@@ -1,0 +1,11 @@
+/target/
+.env
+node_modules/
+dist/
+
+/data/
+
+/apps/desktop/src-tauri/target/
+/apps/desktop/src-tauri/gen/
+
+__pycache__/

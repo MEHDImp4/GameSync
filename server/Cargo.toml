@@ -1,0 +1,24 @@
+[package]
+name = "gamesync-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs", "io-util", "time", "sync"] }
+blake3.workspace = true
+serde.workspace = true
+serde_json = "1"
+uuid.workspace = true
+gamesync-storage = { path = "../crates/gamesync-storage" }
+gamesync-core = { path = "../crates/gamesync-core" }
+rusqlite = { version = "0.38", features = ["bundled"] }
+tokio-util = { version = "0.7", features = ["io"] }
+
+[dev-dependencies]
+serde_yaml = "0.9"
+gamesync-sync = { path = "../crates/gamesync-sync" }
+reqwest = { version = "0.12", default-features = false }
+gamesync-protocol = { path = "../crates/gamesync-protocol" }
+tempfile.workspace = true

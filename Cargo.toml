@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/gamesync-core", "crates/gamesync-sync", "crates/gamesync-storage", "crates/gamesync-protocol", "crates/gamesync-discovery", "server"]
+resolver = "3"
+exclude = ["apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+blake3 = "1"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+tempfile = "3"

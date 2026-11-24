@@ -1,0 +1,22 @@
+services:
+  gamesync:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      GAMESYNC_KEEP_COUNT: ${GAMESYNC_KEEP_COUNT:-20}
+      GAMESYNC_KEEP_DAYS: ${GAMESYNC_KEEP_DAYS:-30}
+    ports:
+      - "127.0.0.1:${GAMESYNC_HOST_PORT:-8787}:8787"
+    volumes:
+      - type: volume
+        source: gamesync-data
+        target: /var/lib/gamesync
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  gamesync-data:

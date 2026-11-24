@@ -1,0 +1,107 @@
+name: GameSync builds
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            artifact: gamesync-linux-x64
+            extensions: deb,AppImage
+            bundles: deb,appimage
+          - os: windows-2022
+            artifact: gamesync-windows-x64
+            extensions: exe
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf xvfb gnome-keyring dbus-x11
+      - run: rustup update stable
+      - run: cargo +stable test --workspace --locked
+      - name: Verify recovery after running out of disk space
+        if: runner.os == 'Linux'
+        run: |
+          volume=$(mktemp -d)
+          sudo mount -t tmpfs -o "size=1m,uid=$(id -u),gid=$(id -g),mode=0700" tmpfs "$volume"
+          trap 'sudo umount "$volume" && rmdir "$volume"' EXIT
+          GAMESYNC_TEST_LIMITED_VOLUME="$volume" cargo +stable test --locked -p gamesync-sync --test restore -- --ignored --exact linux_restore_retries_after_volume_runs_out_of_space
+      - working-directory: apps/desktop
+        run: npm ci
+      - working-directory: apps/desktop
+        run: npm run tauri -- build --ci --bundles ${{ matrix.bundles }} -- --locked
+      - run: cargo +stable test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features custom-protocol
+      - name: Verify the native Linux interface
+        if: runner.os == 'Linux'
+        run: |
+          cargo +stable build --locked -p gamesync-server
+          cargo +stable build --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features custom-protocol,desktop-smoke
+          xvfb-run -a python3 apps/desktop/tests/smoke.py
+      - name: Install and launch the Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis -Filter '*-setup.exe'
+          if (@($installer).Count -ne 1) { throw 'Expected one NSIS installer.' }
+          & apps/desktop/tests/package-smoke.ps1 -Installer $installer.FullName
+      - name: Install and launch Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          bundle=apps/desktop/src-tauri/target/release/bundle
+          sudo apt-get install -y "$PWD"/"$bundle"/deb/*.deb
+          xvfb-run -a dbus-run-session -- python3 apps/desktop/tests/package-smoke.py "$(command -v gamesync-desktop)"
+          xvfb-run -a dbus-run-session -- python3 apps/desktop/tests/package-smoke.py "$bundle"/appimage/*.AppImage
+      - name: Collect installers and checksums
+        shell: bash
+        env:
+          EXTENSIONS: ${{ matrix.extensions }}
+        run: |
+          python - <<'PY'
+          import hashlib, os, pathlib, shutil
+          bundles = pathlib.Path("apps/desktop/src-tauri/target/release/bundle")
+          destination = pathlib.Path("release-artifacts")
+          destination.mkdir()
+          checksums = []
+          for suffix in os.environ["EXTENSIONS"].split(","):
+              candidates = list(bundles.rglob(f"*.{suffix}"))
+              if len(candidates) != 1:
+                  raise SystemExit(f"Expected exactly one .{suffix} package, found {candidates}")
+              package = shutil.copy2(candidates[0], destination)
+              digest = hashlib.sha256()
+              with open(package, "rb") as content:
+                  for block in iter(lambda: content.read(1024 * 1024), b""):
+                      digest.update(block)
+              checksums.append(f"{digest.hexdigest()}  {candidates[0].name}\n")
+          shutil.copy2("LICENSE", destination)
+          (destination / "SHA256SUMS").write_text("".join(checksums), encoding="ascii")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release-artifacts/
+          if-no-files-found: error
+
+  server:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Docker deployment and persistent data
+        run: bash server/tests/compose-smoke.sh

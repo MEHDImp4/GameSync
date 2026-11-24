@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "linux": {
+      "deb": { "depends": ["libdbus-1-3"] }
+    }
+  }
+}

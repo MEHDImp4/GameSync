@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Allows the main window to receive activity from the Rust engine.",
+  "windows": ["main"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}
