@@ -94,7 +94,12 @@ npm run tauri -- dev
 
 Le serveur utilise `GAMESYNC_PORT` et `GAMESYNC_DATA` pour configurer son port et son répertoire de données. Pour créer le premier code administrateur, utilisez `cargo run --locked -p gamesync-server -- invite --admin` avec le même répertoire de données que le serveur. Les prérequis et commandes de construction sont détaillés dans le [guide d’installation](docs/install.md).
 
-Le workflow GitHub Actions construit les clients Windows et Linux et teste le serveur lorsque les sources, les fichiers de build ou le workflow changent. Une modification limitée à la documentation ne déclenche pas ces builds. Les tags et les lancements manuels déclenchent également le workflow ; les paquets et leurs sommes SHA-256 sont disponibles dans ses artefacts.
+Chaque push de code sur `main` construit et teste le projet, puis publie une préversion bêta distincte dans les versions GitHub. Une modification limitée à la documentation ne déclenche pas ces builds. Pour publier une version stable, pousser un tag comme `v1.2.3` : l’installateur utilise alors la version `1.2.3`. Les publications réussies contiennent les paquets Windows et Linux et leurs sommes SHA-256. Les pull requests et les lancements manuels construisent et testent le projet sans publier de version.
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
 
 ## Licence
 

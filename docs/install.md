@@ -8,7 +8,7 @@ Télécharger l’installateur `-setup.exe` et vérifier son SHA-256 avec `Get-F
 
 ## Linux
 
-Vérifier l’empreinte avec `sha256sum -c SHA256SUMS`. Sur Ubuntu ou Debian, ouvrir le paquet avec le gestionnaire de logiciels ou exécuter `sudo apt install ./GameSync_VERSION_amd64.deb` avec son nom exact. Pour l’AppImage, utiliser de préférence le paquet construit sur Ubuntu 22.04 par la CI. Conserver le fichier à un emplacement définitif, le rendre exécutable et l’ouvrir. Un service Secret Service accessible dans la session desktop est nécessaire pour l’appairage et la synchronisation.
+Télécharger les deux paquets Linux et `SHA256SUMS-gamesync-linux-x64`, puis vérifier leurs empreintes avec `sha256sum -c SHA256SUMS-gamesync-linux-x64`. Sur Ubuntu ou Debian, ouvrir le paquet avec le gestionnaire de logiciels ou exécuter `sudo apt install ./GameSync_VERSION_amd64.deb` avec son nom exact. Pour l’AppImage, utiliser de préférence le paquet construit sur Ubuntu 22.04 par la CI. Conserver le fichier à un emplacement définitif, le rendre exécutable et l’ouvrir. Un service Secret Service accessible dans la session desktop est nécessaire pour l’appairage et la synchronisation.
 
 Le paquet Debian et l’AppImage construits sur Ubuntu 22.04 ont été lancés dans des environnements Ubuntu 22.04 et 24.04 avec Xvfb.
 

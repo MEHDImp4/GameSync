@@ -1,6 +1,8 @@
 name: GameSync builds
 on:
   push:
+    branches: [main]
+    tags: ['v*']
     paths:
       - 'apps/desktop/**'
       - 'crates/**'
@@ -46,6 +48,13 @@ jobs:
       APPIMAGE_EXTRACT_AND_RUN: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Expected a stable tag such as v1.2.3' >&2; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -67,7 +76,16 @@ jobs:
       - working-directory: apps/desktop
         run: npm ci
       - working-directory: apps/desktop
-        run: npm run tauri -- build --ci --bundles ${{ matrix.bundles }} -- --locked
+        shell: bash
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$RELEASE_REF" == refs/tags/* ]]; then
+            npm run tauri -- build --ci --bundles ${{ matrix.bundles }} --config "{\"version\":\"${RELEASE_TAG#v}\"}" -- --locked
+          else
+            npm run tauri -- build --ci --bundles ${{ matrix.bundles }} -- --locked
+          fi
       - run: cargo +stable test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features custom-protocol
       - name: Verify the native Linux interface
         if: runner.os == 'Linux'
@@ -93,6 +111,7 @@ jobs:
         shell: bash
         env:
           EXTENSIONS: ${{ matrix.extensions }}
+          ARTIFACT: ${{ matrix.artifact }}
         run: |
           python - <<'PY'
           import hashlib, os, pathlib, shutil
@@ -111,7 +130,7 @@ jobs:
                       digest.update(block)
               checksums.append(f"{digest.hexdigest()}  {candidates[0].name}\n")
           shutil.copy2("LICENSE", destination)
-          (destination / "SHA256SUMS").write_text("".join(checksums), encoding="ascii")
+          (destination / f"SHA256SUMS-{os.environ['ARTIFACT']}").write_text("".join(checksums), encoding="ascii")
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -137,3 +156,50 @@ jobs:
             gamesync-server-linux-amd64.tar.gz
             gamesync-server-linux-amd64.tar.gz.sha256
           if-no-files-found: error
+
+  release:
+    needs: [desktop, server]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gamesync-windows-x64
+          path: windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: gamesync-linux-x64
+          path: linux
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          if [[ "$REF" == refs/tags/* ]]; then
+            tag="$REF_NAME"
+            [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || exit 1
+            prerelease=()
+            title="GameSync $tag"
+          else
+            tag="beta-$COMMIT"
+            prerelease=(--prerelease)
+            title="GameSync bêta ${COMMIT:0:7}"
+          fi
+          if gh release view "$tag" --json isDraft --jq '.isDraft' > release-state.txt 2>/dev/null; then
+            if [[ "$(cat release-state.txt)" != true ]]; then
+              echo "Release $tag already published; leaving it unchanged."
+              exit 0
+            fi
+          else
+            gh release create "$tag" --target "$COMMIT" --draft "${prerelease[@]}" --title "$title" --notes "Build du commit $COMMIT. Consultez le guide d'installation avant utilisation."
+          fi
+          gh release upload "$tag" windows/* linux/*.deb linux/*.AppImage linux/SHA256SUMS-* --clobber
+          gh release edit "$tag" --draft=false
