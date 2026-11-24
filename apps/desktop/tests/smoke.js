@@ -29,7 +29,7 @@ async (input) => {
 
   try {
     if (input.code) {
-      await waitFor(() => document.querySelector("#setup-title") || findButton("Paramètres"), "startup screen");
+      await waitFor(() => document.querySelector('#setup-title, [data-config-ready="true"]'), "startup screen");
       const inSetup = Boolean(document.querySelector("#setup-title"));
       if (inSetup) await click("Continuer");
       else await click("Paramètres");

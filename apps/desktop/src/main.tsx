@@ -392,7 +392,7 @@ function App() {
     );
   }
   return (
-    <Tabs.Root value={tab} onValueChange={setTab} className="shell">
+    <Tabs.Root value={tab} onValueChange={setTab} className="shell" data-config-ready={Boolean(config)}>
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 8a7 7 0 0 1 11.6-2L20 12M4 12l2.8 6a7 7 0 0 0 11.6-2"/></svg></span><span>GameSync<small>DESKTOP</small></span></div>
         <Tabs.List className="navigation" aria-label={labels.navigation}>
