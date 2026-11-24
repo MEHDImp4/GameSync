@@ -31,6 +31,44 @@ Le tableau de bord présente le stockage et les dernières publications du serve
 
 Pour un premier test, le serveur peut être compilé dans Termux sur Android et accessible au client Windows par un tunnel SSH. Cette méthode est expérimentale et attend une validation sur appareil réel ; elle ne fournit pas d’application Android graphique. Suivre le [guide Android](docs/android.md), puis la [recette Windows](docs/validation.md), en commençant par des données fictives et en conservant une copie indépendante des sauvegardes.
 
+## Installation Windows et serveur Unraid
+
+Cette première version est expérimentale : la recette sur Windows et Unraid reste à effectuer. Commencer avec des sauvegardes fictives et conserver une copie indépendante des sauvegardes réelles.
+
+### 1. Construire le serveur sur Unraid
+
+Dans le terminal Unraid (interface Web ou SSH), avec Docker et Docker Compose disponibles :
+
+```sh
+cd /mnt/user/appdata
+git clone https://github.com/MEHDImp4/GameSync.git gamesync-source
+cd gamesync-source
+git checkout v0.1.0
+install -d -o 10001 -g 10001 -m 0700 /mnt/user/appdata/gamesync
+docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml up -d --build
+```
+
+Le dépôt étant privé, le clonage HTTPS demande une authentification GitHub autorisée ; un mot de passe GitHub classique ne fonctionne pas. On peut aussi cloner avec SSH si la clé de l'hôte est autorisée. La première compilation peut prendre plusieurs minutes. Les données persistantes sont dans `/mnt/user/appdata/gamesync`, indépendamment du dossier source.
+
+Vérifier le serveur et créer le premier code d'appairage administrateur :
+
+```sh
+curl -fsS http://127.0.0.1:8787/healthz
+docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml logs --tail=100 gamesync
+docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml exec gamesync gamesync-server invite --admin
+```
+
+Le port est volontairement accessible uniquement depuis Unraid. Pour connecter Windows, configurer Tailscale Serve ou un proxy HTTPS vers `http://127.0.0.1:8787`, puis utiliser l'adresse HTTPS obtenue dans le client. Le code est à usage unique et expire après dix minutes. Voir le [guide Unraid](docs/unraid.md) pour la sauvegarde du serveur et les autres commandes.
+
+### 2. Installer et appairer Windows
+
+1. Dans les [versions GitHub](https://github.com/MEHDImp4/GameSync/releases), télécharger l'installateur Windows `-setup.exe` de la version 0.1.0. L'accès nécessite un compte autorisé sur ce dépôt privé.
+2. Exécuter l'installateur, puis ouvrir GameSync depuis le menu Démarrer. L'installateur n'est pas signé et peut déclencher Microsoft SmartScreen.
+3. Dans **Paramètres**, saisir l'adresse HTTPS du serveur, un nom pour le PC et le code administrateur généré ci-dessus.
+4. Ajouter un jeu de test, indiquer son dossier de sauvegarde et son exécutable, fermer le jeu et lancer une synchronisation. Sur un second PC, appairer l'appareil avec un nouveau code, puis sélectionner le jeu depuis **Jeux sur le serveur**.
+
+Pour vérifier l'intégrité du téléchargement, comparer `Get-FileHash -Algorithm SHA256 .\nom-du-fichier-setup.exe` dans PowerShell avec le fichier `SHA256SUMS` joint à la version.
+
 ## Serveur de développement
 
 ```sh
