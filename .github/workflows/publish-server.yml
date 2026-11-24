@@ -1,7 +1,13 @@
 name: Publish server image
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: publish-server-main
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -9,6 +15,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
