@@ -1,7 +1,27 @@
 name: GameSync builds
 on:
   push:
+    paths:
+      - 'apps/desktop/**'
+      - 'crates/**'
+      - 'server/**'
+      - 'docker/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.dockerignore'
+      - 'LICENSE'
+      - '.github/workflows/desktop.yml'
   pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'crates/**'
+      - 'server/**'
+      - 'docker/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.dockerignore'
+      - 'LICENSE'
+      - '.github/workflows/desktop.yml'
   workflow_dispatch:
 
 permissions:

@@ -1,6 +1,23 @@
 # GameSync
 
-GameSync est un projet de synchronisation auto-hébergée de sauvegardes de jeux entre Windows et Linux.
+GameSync synchronise des sauvegardes de jeux entre des ordinateurs Windows et Linux à l’aide d’un serveur que vous hébergez vous-même. Le client desktop permet d’ajouter des jeux, de synchroniser leurs dossiers et de consulter les révisions et conflits.
+
+> **Version expérimentale** : la recette native Windows et le déploiement sur Unraid restent à vérifier. Commencez avec des données fictives et conservez une copie indépendante de vos sauvegardes.
+
+## Fonctionnalités
+
+- Synchronisation manuelle ou en arrière-plan, avec plusieurs dossiers de sauvegarde par jeu.
+- Historique des révisions, détection des conflits et possibilité de republier une version antérieure.
+- Découverte des jeux Steam, ainsi que des installations Epic et GOG sous Windows ; suggestions de dossiers via un manifeste Ludusavi local.
+- Serveur auto-hébergé, appairage des appareils et transferts reprenables avec vérification d’intégrité.
+
+## Bien démarrer
+
+1. Déployez le serveur et créez un code d’appairage administrateur. Voir les instructions [Windows et Unraid](#installation-windows-et-serveur-unraid) ou le [guide Docker et Unraid](docs/unraid.md).
+2. Installez le client depuis les [versions GitHub](https://github.com/MEHDImp4/GameSync/releases) ou construisez-le en suivant le [guide d’installation](docs/install.md).
+3. Appairez le premier appareil, ajoutez un jeu de test et synchronisez-le. Appairez ensuite un second appareil pour retrouver le jeu.
+
+Pour développer, consultez les sections [Développement](#développement) et [Client desktop](#client-desktop-en-développement). Les guides de [dépannage](docs/troubleshooting.md), d’[architecture](docs/architecture.md) et de [validation](docs/validation.md) détaillent le fonctionnement et les limites actuelles.
 
 ## État du dépôt
 
@@ -22,6 +39,8 @@ Le moteur de synchronisation relie maintenant les opérations locales et l’API
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
+
+Le workflow GitHub Actions construit les clients Windows et Linux et teste le serveur lorsque les sources, les fichiers de build ou le workflow changent. Une modification limitée à la documentation ne déclenche pas ces builds. Les tags continuent de lancer le workflow, et il peut aussi être lancé manuellement depuis l’onglet Actions. Les installateurs et leurs sommes SHA-256 sont disponibles dans les artefacts du workflow.
 
 Le client Rust partagé prend en charge l’appairage, les révisions et les transferts reprenables avec vérification BLAKE3 sur disque. Un test lance le serveur et vérifie les publications concurrentes, la reprise d’un envoi après redémarrage et la récupération après corruption d’un transfert ou d’un téléchargement partiel.
 
