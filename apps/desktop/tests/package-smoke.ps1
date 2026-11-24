@@ -37,15 +37,35 @@ try {
             $names = $tables -split ' '
             if ($LASTEXITCODE -eq 0 -and ($names -contains 'activity') -and ($names -contains 'config')) {
                 Write-Output 'The Windows installer launched GameSync and the webview initialized its activity database.'
-                return
+                break
             }
         }
         Start-Sleep -Milliseconds 250
     }
-    throw 'The installed GameSync client did not initialize its database.'
+    if ((Get-Date) -ge $deadline) {
+        throw 'The installed GameSync client did not initialize its database.'
+    }
 }
 finally {
     if (-not $client.HasExited) {
         Stop-Process -Id $client.Id -Force
+        $client.WaitForExit()
     }
+}
+
+$hash = (Get-FileHash $database).Hash
+$uninstaller = Join-Path $directory 'uninstall.exe'
+$uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/S _?=$directory" -PassThru
+if (-not $uninstall.WaitForExit(60000) -or $uninstall.ExitCode -ne 0 -or (Test-Path $executable)) {
+    throw 'GameSync uninstall failed or timed out.'
+}
+if ((Get-FileHash $database).Hash -ne $hash) {
+    throw 'Uninstall changed the GameSync database.'
+}
+$reinstall = Start-Process -FilePath $installerPath -ArgumentList "/S /D=$directory" -PassThru
+if (-not $reinstall.WaitForExit(180000) -or $reinstall.ExitCode -ne 0 -or -not (Test-Path $executable)) {
+    throw 'GameSync reinstall failed or timed out.'
+}
+if ((Get-FileHash $database).Hash -ne $hash) {
+    throw 'Reinstall changed the GameSync database.'
 }

@@ -34,6 +34,12 @@ Dans **Paramètres → Apparence**, choisir le français ou l’anglais. Le choi
 
 Quitter GameSync entièrement. Installer le nouvel NSIS ou le nouveau paquet Debian par-dessus la version existante. Pour l’AppImage, remplacer le fichier en gardant son chemin. Après redémarrage, contrôler l’état d’appairage et l’historique d’un jeu de test. Les mises à jour sont manuelles.
 
+## Réinstaller GameSync
+
+Réinstaller GameSync avec le même compte système pour retrouver les jeux, leurs chemins, les réglages et l’activité. Sous Windows, laisser décochée l’option de suppression des données dans le désinstalleur. Sous Linux, conserver le dossier de données de GameSync dans le profil utilisateur. Si le jeton du coffre système a été supprimé ou révoqué, appairer de nouveau l’appareil dans **Paramètres** avec une invitation du même serveur. Les jeux configurés restent associés à leurs dossiers locaux.
+
+Au premier lancement, l’assistant propose de choisir la langue, de connecter le serveur et d’ajouter un jeu. Il reste accessible dans **Paramètres → Apparence**.
+
 ## Construire les installateurs
 
 Le workflow GitHub Actions `GameSync builds` construit sur Linux et Windows natifs, exécute les tests du workspace et publie les paquets et leurs sommes SHA-256 comme artefacts de CI. La tâche Linux installe le paquet Debian sur le système de construction et vérifie le démarrage graphique du binaire installé et de l’AppImage. Le choix de la distribution de compilation détermine la compatibilité des bibliothèques embarquées dans l’AppImage. Pour produire un paquet Linux portable, utiliser une distribution de compilation au moins aussi ancienne que le plus ancien système visé. Depuis un système de compilation avec Rust stable, Node et les prérequis Tauri, exécuter dans `apps/desktop` les commandes `npm ci` et `npm run tauri -- build --ci -- --locked`.

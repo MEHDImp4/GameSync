@@ -109,6 +109,8 @@ pub struct Config {
     pub theme: Theme,
     #[serde(default)]
     pub locale: Locale,
+    #[serde(default = "enabled")]
+    pub onboarding_complete: bool,
 }
 
 fn default_interval() -> u64 {
@@ -126,6 +128,7 @@ impl Default for Config {
             notifications: false,
             theme: Theme::default(),
             locale: Locale::default(),
+            onboarding_complete: false,
         }
     }
 }

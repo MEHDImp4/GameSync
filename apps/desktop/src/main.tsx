@@ -21,7 +21,7 @@ type Installation = { store: string; store_id: string; title: string; directory:
 type Root = { id: string; label: string };
 type RemoteGame = { id: string; title: string; roots: Root[] };
 type Game = { id: string; root: string; title: string; root_label: string; tracking: boolean; directory: string; executable: string; additional_roots: (Root & { directory: string })[] };
-type Config = { server: { url: string; device: string } | null; games: Game[]; automatic: boolean; interval_seconds: number; bandwidth_kib: number; notifications: boolean; theme: "dark" | "light"; locale: Locale };
+type Config = { server: { url: string; device: string } | null; games: Game[]; automatic: boolean; interval_seconds: number; bandwidth_kib: number; notifications: boolean; theme: "dark" | "light"; locale: Locale; onboarding_complete: boolean };
 type Revision = { id: number; machine: string; created_at: number; published: boolean; resolved_by: number | null; bytes: number };
 type History = { head: number | null; items: Revision[] };
 type Status = SyncStatus["status"] | "error";
@@ -53,6 +53,8 @@ function NavIcon({ name }: { name: NavIconName }) {
 }
 function App() {
   const [config, setConfig] = useState<Config>();
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupStep, setSetupStep] = useState(0);
   const [tab, setTab] = useState("dashboard");
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -186,12 +188,13 @@ function App() {
     }
   }, [tab, config?.server?.device]);
 
-  async function pair(event: FormEvent<HTMLFormElement>) {
+  async function pair(event: FormEvent<HTMLFormElement>, inSetup = false) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     await perform(async () => {
       await invoke("pair", Object.fromEntries(form));
       await refresh();
+      if (inSetup) setSetupStep(2);
       return labels.pairedNotice;
     });
   }
@@ -344,6 +347,50 @@ function App() {
   const trackedGames = config?.games.filter((item) => item.tracking).length ?? 0;
   const games = config?.games.filter((item) => item.title.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))
     && (libraryFilter === "all" || (libraryFilter === "attention" ? needsAttention(item) : !item.tracking))) ?? [];
+  if (config && (showSetup || !config.onboarding_complete)) {
+    const fr = locale === "fr";
+    const finish = (addGame: boolean) => void perform(async () => {
+      await invoke("complete_onboarding");
+      await refresh();
+      setShowSetup(false);
+      setSetupStep(0);
+      if (addGame) {
+        setTab("library");
+        openWizard();
+      }
+    });
+    return (
+      <main className="workspace">
+        <section className="panel form" aria-labelledby="setup-title">
+          <h1 id="setup-title">{fr ? "Bienvenue dans GameSync" : "Welcome to GameSync"}</h1>
+          {error && <p className="notice error" role="alert">{error}</p>}
+          {setupStep === 0 && <>
+            <label>{labels.language}<select value={locale} disabled={busy} onChange={(event) => {
+              const next = event.currentTarget.value;
+              void perform(async () => { await invoke("set_locale", { locale: next }); await refresh(); });
+            }}>
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+            </select></label>
+            <button className="primary" disabled={busy} onClick={() => setSetupStep(config.server ? 2 : 1)}>{labels.next}</button>
+          </>}
+          {setupStep === 1 && <form className="form" onSubmit={(event) => void pair(event, true)}>
+            <p>{fr ? "Saisis l’adresse de ton serveur et le code d’appairage. Tu pourras aussi le faire plus tard dans Paramètres." : "Enter your server address and pairing code. You can also do this later in Settings."}</p>
+            <label>{fr ? "Adresse du serveur" : "Server address"}<input name="address" type="url" placeholder="https://…" required /></label>
+            <label>{fr ? "Nom de l’appareil" : "Device name"}<input name="name" required /></label>
+            <label>{labels.pairingCode}<input name="code" type="password" autoComplete="off" required /></label>
+            <button className="primary" disabled={busy}>{labels.pairDevice}</button>
+            <button type="button" disabled={busy} onClick={() => { setError(""); setSetupStep(2); }}>{fr ? "Configurer plus tard" : "Set up later"}</button>
+          </form>}
+          {setupStep === 2 && <>
+            <p>{fr ? "Ajoute un jeu pour choisir les dossiers de sauvegarde à suivre." : "Add a game to choose the save folders to track."}</p>
+            <button className="primary" disabled={busy} onClick={() => finish(true)}>{labels.addGame}</button>
+            <button disabled={busy} onClick={() => finish(false)}>{fr ? "Terminer" : "Finish"}</button>
+          </>}
+        </section>
+      </main>
+    );
+  }
   return (
     <Tabs.Root value={tab} onValueChange={setTab} className="shell">
       <aside className="sidebar">
@@ -606,6 +653,7 @@ function App() {
           </form>
           {config && <section className="panel form">
             <h2>{labels.appearance}</h2>
+            <button disabled={busy} onClick={() => { setError(""); setSetupStep(0); setShowSetup(true); }}>{locale === "fr" ? "Ouvrir l’assistant de configuration" : "Open setup assistant"}</button>
             <label>{labels.language}<select name="locale" value={locale} disabled={busy} onChange={(event) => {
               const next = event.currentTarget.value;
               void perform(async () => { await invoke("set_locale", { locale: next }); await refresh(); });

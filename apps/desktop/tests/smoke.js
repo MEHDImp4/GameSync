@@ -29,13 +29,21 @@ async (input) => {
 
   try {
     if (input.code) {
-      await click("Paramètres");
+      await waitFor(() => document.querySelector("#setup-title") || findButton("Paramètres"), "startup screen");
+      const inSetup = Boolean(document.querySelector("#setup-title"));
+      if (inSetup) await click("Continuer");
+      else await click("Paramètres");
       await waitFor(() => document.querySelector('input[name="code"]'), "pairing form");
       field("address", input.address);
       field("name", input.device);
       field("code", input.code);
       await click("Appairer cet appareil");
-      await status("Appareil appairé");
+      if (inSetup) {
+        await click("Terminer");
+        await click("Paramètres");
+      } else {
+        await status("Appareil appairé");
+      }
     }
 
     if (input.mode === "seed") {

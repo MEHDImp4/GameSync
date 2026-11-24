@@ -37,13 +37,24 @@ impl App {
     }
 
     fn session(&self) -> Result<Session> {
-        let server = self
-            .config()?
-            .server
-            .clone()
-            .ok_or("Appairez d’abord cet appareil.")?;
+        let (server, locale) = {
+            let settings = self.config()?;
+            let server = settings
+                .server
+                .clone()
+                .ok_or("Appairez d’abord cet appareil.")?;
+            (server, settings.locale)
+        };
         let entry = credential(server.device)?;
-        let token = entry.get_password().map_err(failure)?;
+        let token = entry.get_password().map_err(|error| match error {
+            keyring::Error::NoEntry => locale
+                .text(
+                    "Jeton introuvable. Appairez à nouveau cet appareil dans Paramètres.",
+                    "Device token missing. Pair this device again in Settings.",
+                )
+                .into(),
+            other => failure(other),
+        })?;
         Ok(Api::new(&server.url)
             .map_err(failure)?
             .authenticate(Credentials {
@@ -708,6 +719,18 @@ fn set_locale(app: State<'_, App>, locale: config::Locale) -> Result<()> {
 }
 
 #[tauri::command]
+fn complete_onboarding(app: State<'_, App>) -> Result<()> {
+    let mut settings = app.config()?;
+    let previous = settings.onboarding_complete;
+    settings.onboarding_complete = true;
+    if let Err(error) = config::save(&app.data, &settings) {
+        settings.onboarding_complete = previous;
+        return Err(error);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn quit(app: tauri::AppHandle) {
     background::quit_when_idle(&app);
 }
@@ -805,6 +828,7 @@ fn main() {
             automation,
             set_theme,
             set_locale,
+            complete_onboarding,
             autostart,
             quit
         ])
