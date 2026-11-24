@@ -111,6 +111,15 @@ async fn run(app: AppHandle, mut triggers: mpsc::Receiver<Trigger>) {
     let (events, mut watcher_events) = mpsc::channel(256);
     let overflow = Arc::new(AtomicBool::new(false));
     let watcher_overflow = overflow.clone();
+    let parent_events = events.clone();
+    let parent_overflow = overflow.clone();
+    let mut parent_watcher = notify::recommended_watcher(move |event| {
+        if let Some(trigger) = watch_trigger(event, &parent_overflow) {
+            enqueue_watch_event(&parent_events, &parent_overflow, trigger);
+        }
+    })
+    .ok();
+    let mut watched_parents = HashSet::new();
     let mut watcher =
         match notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
             let Some(trigger) = watch_trigger(event, &watcher_overflow) else {
@@ -170,6 +179,9 @@ async fn run(app: AppHandle, mut triggers: mpsc::Receiver<Trigger>) {
             .collect();
         let queue_overflowed = overflow.swap(false, Ordering::AcqRel);
         let missed_events = queue_overflowed || matches!(&trigger, Some(Trigger::WatchError(_)));
+        if let Some(parent_watcher) = &mut parent_watcher {
+            update_parent_watches(parent_watcher, &mut watched_parents, &desired);
+        }
         if queue_overflowed {
             emit(
                 &app,
@@ -331,6 +343,28 @@ async fn run(app: AppHandle, mut triggers: mpsc::Receiver<Trigger>) {
 fn reset_watches(watcher: &mut RecommendedWatcher, watched: &mut HashSet<PathBuf>) {
     for path in watched.drain() {
         let _ = watcher.unwatch(&path);
+    }
+}
+
+fn update_parent_watches(
+    watcher: &mut RecommendedWatcher,
+    watched: &mut HashSet<PathBuf>,
+    desired: &HashSet<PathBuf>,
+) {
+    let parents: HashSet<_> = desired
+        .iter()
+        .filter_map(|path| path.parent())
+        .filter(|path| path.is_dir())
+        .map(|path| path.to_path_buf())
+        .collect();
+    for path in watched.difference(&parents) {
+        let _ = watcher.unwatch(path);
+    }
+    watched.retain(|path| parents.contains(path));
+    for path in parents.difference(watched).cloned().collect::<Vec<_>>() {
+        if watcher.watch(&path, RecursiveMode::NonRecursive).is_ok() {
+            watched.insert(path);
+        }
     }
 }
 
@@ -572,11 +606,18 @@ mod tests {
         let root = workspace.path().join("saves");
         std::fs::create_dir(&root).unwrap();
         let (sender, receiver) = std::sync::mpsc::channel();
+        let parent_sender = sender.clone();
         let mut watcher = notify::recommended_watcher(move |event| {
             let _ = sender.send(event);
         })
         .unwrap();
+        let mut parent_watcher = notify::recommended_watcher(move |event| {
+            let _ = parent_sender.send(event);
+        })
+        .unwrap();
         let desired = HashSet::from([root.clone()]);
+        let mut watched_parents = HashSet::new();
+        update_parent_watches(&mut parent_watcher, &mut watched_parents, &desired);
         let mut watched = HashSet::new();
         let mut failures = HashSet::new();
         update_watches(

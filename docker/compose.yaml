@@ -1,5 +1,6 @@
 services:
   gamesync:
+    image: gamesync-server:local
     build:
       context: ..
       dockerfile: server/Dockerfile
@@ -17,6 +18,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - SETUID
+      - SETGID
 
 volumes:
   gamesync-data:

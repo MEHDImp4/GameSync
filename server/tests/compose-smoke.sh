@@ -2,12 +2,16 @@
 # Run against a dedicated Compose project and a free localhost port.
 set -euo pipefail
 project="gamesync-smoke-$$"
+appdata=$(mktemp -d)
 export GAMESYNC_HOST_PORT="${GAMESYNC_HOST_PORT:-18787}"
 compose=(docker compose -p "$project" -f docker/compose.yaml)
-trap '"${compose[@]}" down -v' EXIT
+trap '"${compose[@]}" down -v; sudo rm -rf -- "$appdata"' EXIT
 url="http://127.0.0.1:$GAMESYNC_HOST_PORT"
 
 "${compose[@]}" up -d --build --wait
+docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+  -v "$appdata:/var/lib/gamesync" gamesync-server:local invite --admin > /dev/null
+test -n "$(sudo ls -A "$appdata")"
 invite=$("${compose[@]}" exec -T gamesync gamesync-server invite --admin)
 credentials=$(curl -fsS "$url/v1/pair" -H 'Content-Type: application/json' \
   --data "{\"code\":\"$invite\",\"name\":\"Compose smoke test\"}")

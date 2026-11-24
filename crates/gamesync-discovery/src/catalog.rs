@@ -11,6 +11,8 @@ struct Game {
     steam: Option<StoreId>,
     gog: Option<StoreId>,
     alias: Option<String>,
+    #[serde(rename = "installDir", default)]
+    install_dir: BTreeMap<String, serde_yaml::Value>,
     #[serde(default)]
     files: BTreeMap<String, Rule>,
 }
@@ -39,6 +41,23 @@ pub fn suggest(path: &Path, installations: &mut [Installation]) -> Result<(), St
         .map_err(|error| format!("{}: {error}", path.display()))?;
     let games: BTreeMap<String, Game> =
         serde_yaml::from_str(&text).map_err(|error| error.to_string())?;
+    let mut names = BTreeMap::<String, Option<&Game>>::new();
+    for (title, game) in &games {
+        for name in std::iter::once(title).chain(game.install_dir.keys()) {
+            let key = normalize_name(name);
+            if key.is_empty() {
+                continue;
+            }
+            names
+                .entry(key)
+                .and_modify(|existing| {
+                    if existing.is_some_and(|other| !std::ptr::eq(other, game)) {
+                        *existing = None;
+                    }
+                })
+                .or_insert(Some(game));
+        }
+    }
     for installation in installations {
         let id = installation.store_id.parse::<u64>().ok();
         let matching_id = id.and_then(|id| {
@@ -51,7 +70,15 @@ pub fn suggest(path: &Path, installations: &mut [Installation]) -> Result<(), St
                 store.as_ref().and_then(|store| store.id) == Some(id)
             })
         });
-        let Some(mut game) = matching_id.or_else(|| games.get(&installation.title)) else {
+        let Some(mut game) = matching_id
+            .or_else(|| games.get(&installation.title))
+            .or_else(|| {
+                names
+                    .get(&normalize_name(&installation.title))
+                    .copied()
+                    .flatten()
+            })
+        else {
             continue;
         };
         if let Some(alias) = &game.alias {
@@ -94,9 +121,26 @@ pub fn suggest(path: &Path, installations: &mut [Installation]) -> Result<(), St
                 );
             }
         }
-        installation.candidates = candidates.into_iter().collect();
+        let mut paths = Vec::<(PathBuf, PathBuf)>::new();
+        for candidate in candidates {
+            if let Ok(resolved) = candidate.canonicalize() {
+                if paths.iter().any(|(_, parent)| resolved.starts_with(parent)) {
+                    continue;
+                }
+                paths.retain(|(_, other)| !other.starts_with(&resolved));
+                paths.push((candidate, resolved));
+            }
+        }
+        installation.candidates = paths.into_iter().map(|(path, _)| path).collect();
     }
     Ok(())
+}
+
+fn normalize_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 type Paths = BTreeMap<&'static str, PathBuf>;
@@ -183,6 +227,9 @@ fn add_rule(
     let Some(base) = paths.get(placeholder).and_then(|path| path.to_str()) else {
         return;
     };
+    // A store user ID denotes a single profile directory.
+    // Unknown placeholders remain unsupported.
+    let suffix = suffix.replace("<storeUserId>", "*");
     if suffix.is_empty()
         || suffix.contains(['<', '>', '\\', ':'])
         || suffix
@@ -212,6 +259,73 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[test]
+    fn resolves_rockstar_profile_placeholder_without_expanding_other_variables() {
+        let temp = tempfile::tempdir().unwrap();
+        let profiles = temp
+            .path()
+            .join("Rockstar Games/Red Dead Redemption 2/Profiles");
+        let profile = profiles.join("B6296283");
+        fs::create_dir_all(&profile).unwrap();
+        let paths = Paths::from([("<winDocuments>", temp.path().to_owned())]);
+        let rule = Rule {
+            tags: vec!["save".into()],
+            when: vec![],
+        };
+        let mut found = BTreeSet::new();
+        add_rule(
+            &mut found,
+            "<winDocuments>/Rockstar Games/Red Dead Redemption 2/Profiles/<storeUserId>",
+            &rule,
+            "steam",
+            "windows",
+            &paths,
+        );
+        assert_eq!(found, BTreeSet::from([profile]));
+        found.clear();
+        add_rule(
+            &mut found,
+            "<winDocuments>/Rockstar Games/Red Dead Redemption 2/Profiles/<unknown>",
+            &rule,
+            "steam",
+            "windows",
+            &paths,
+        );
+        assert!(found.is_empty());
+    }
+    #[test]
+    fn matches_install_directory_name_and_finds_saves() {
+        let temp = tempfile::tempdir().unwrap();
+        let install = temp.path().join("GameFolder");
+        let saves = install.join("Saves");
+        fs::create_dir_all(saves.join("profile")).unwrap();
+        let yaml = temp.path().join("manifest.yaml");
+        fs::write(
+            &yaml,
+            r#"
+A Game:
+  installDir:
+    GameFolder: {}
+  files:
+    <base>/Saves:
+      tags: [save]
+    <base>/Saves/profile:
+      tags: [save]
+"#,
+        )
+        .unwrap();
+        let mut game = Installation {
+            store: "folder",
+            store_id: "custom".into(),
+            title: "game folder".into(),
+            directory: install,
+            executable: None,
+            proton_prefix: None,
+            candidates: vec![],
+        };
+        suggest(&yaml, std::slice::from_mut(&mut game)).unwrap();
+        assert_eq!(game.candidates, vec![saves]);
+    }
     #[test]
     fn matches_store_id_and_resolves_proton_save_directory() {
         let temp = tempfile::tempdir().unwrap();

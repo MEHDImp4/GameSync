@@ -90,18 +90,88 @@ async fn pair(app: State<'_, App>, address: String, code: String, name: String) 
     Ok(())
 }
 
+const MANIFEST_URL: &str =
+    "https://raw.githubusercontent.com/mtkennerly/ludusavi-manifest/master/data/manifest.yaml";
+const MANIFEST_LIMIT: usize = 32 * 1024 * 1024;
+
+async fn discovery_catalog(data: &Path, selected: Option<PathBuf>) -> Result<PathBuf> {
+    if let Some(path) = selected {
+        return Ok(path);
+    }
+    let path = data.join("ludusavi.yaml");
+    if path.is_file() {
+        return Ok(path);
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .map_err(failure)?;
+    let mut response = client
+        .get(MANIFEST_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Téléchargement du catalogue de sauvegardes impossible : {e}"))?
+        .error_for_status()
+        .map_err(failure)?;
+    if response
+        .content_length()
+        .is_some_and(|size| size > MANIFEST_LIMIT as u64)
+    {
+        return Err("Catalogue de sauvegardes trop volumineux.".into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(failure)? {
+        if bytes.len() + chunk.len() > MANIFEST_LIMIT {
+            return Err("Catalogue de sauvegardes trop volumineux.".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    std::fs::create_dir_all(data).map_err(failure)?;
+    // Avoid leaving a partial cache when the download or application is interrupted.
+    let temporary = data.join(format!("ludusavi-{}.tmp", Uuid::new_v4()));
+    std::fs::write(&temporary, &bytes).map_err(failure)?;
+    if let Err(error) = std::fs::rename(&temporary, &path) {
+        let _ = std::fs::remove_file(&temporary);
+        if !path.is_file() {
+            return Err(failure(error));
+        }
+    }
+    Ok(path)
+}
+
 #[tauri::command]
 async fn discover(
     app: State<'_, App>,
     catalog: Option<PathBuf>,
 ) -> Result<Vec<gamesync_discovery::Installation>> {
-    let catalog = catalog.or_else(|| {
-        let path = app.data.join("ludusavi.yaml");
-        path.is_file().then_some(path)
-    });
+    let explicit = catalog.is_some();
+    let catalog = match discovery_catalog(&app.data, catalog).await {
+        Ok(path) => Some(path),
+        Err(error) if explicit => return Err(error),
+        Err(_) => None,
+    };
     tauri::async_runtime::spawn_blocking(move || gamesync_discovery::discover(catalog.as_deref()))
         .await
         .map_err(failure)?
+}
+
+#[tauri::command]
+async fn discover_folder(
+    app: State<'_, App>,
+    directory: PathBuf,
+    catalog: Option<PathBuf>,
+) -> Result<Vec<gamesync_discovery::Installation>> {
+    let explicit = catalog.is_some();
+    let catalog = match discovery_catalog(&app.data, catalog).await {
+        Ok(path) => Some(path),
+        Err(error) if explicit => return Err(error),
+        Err(_) => None,
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        gamesync_discovery::discover_folder(&directory, catalog.as_deref())
+    })
+    .await
+    .map_err(failure)?
 }
 
 #[derive(Deserialize)]
@@ -671,6 +741,7 @@ fn main() {
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&data)?;
@@ -722,6 +793,7 @@ fn main() {
             synchronize_and_launch,
             server_games,
             discover,
+            discover_folder,
             synchronize,
             history,
             recent_activity,

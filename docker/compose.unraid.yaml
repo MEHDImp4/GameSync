@@ -5,4 +5,4 @@ services:
         source: ${GAMESYNC_UNRAID_DATA:-/mnt/user/appdata/gamesync}
         target: /var/lib/gamesync
         bind:
-          create_host_path: false
+          create_host_path: true

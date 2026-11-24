@@ -1,4 +1,6 @@
 mod catalog;
+mod folder;
+mod saves;
 mod steam;
 #[cfg(windows)]
 mod windows;
@@ -33,11 +35,38 @@ pub fn discover(catalog: Option<&Path>) -> Result<Vec<Installation>, String> {
     if let Some(catalog) = catalog {
         catalog::suggest(catalog, &mut games)?;
     }
+    saves::suggest(&mut games);
     let mut games = deduplicate(games);
     games.sort_by_cached_key(|game| game.title.to_lowercase());
     Ok(games)
 }
 
+pub fn discover_folder(root: &Path, catalog: Option<&Path>) -> Result<Vec<Installation>, String> {
+    let mut games = folder::find(root)?;
+    // Preserve launcher IDs and canonical titles when a scanned installation is known.
+    let known = discover(None)?;
+    for game in &mut games {
+        if let Some(metadata) = known
+            .iter()
+            .find(|item| same_file::is_same_file(&item.directory, &game.directory).unwrap_or(false))
+        {
+            game.store = metadata.store;
+            game.store_id = metadata.store_id.clone();
+            game.title = metadata.title.clone();
+            game.proton_prefix = metadata.proton_prefix.clone();
+            if metadata.executable.is_some() {
+                game.executable = metadata.executable.clone();
+            }
+        }
+    }
+    if let Some(catalog) = catalog {
+        catalog::suggest(catalog, &mut games)?;
+    }
+    saves::suggest(&mut games);
+    let mut games = deduplicate(games);
+    games.sort_by_cached_key(|game| game.title.to_lowercase());
+    Ok(games)
+}
 fn deduplicate(games: Vec<Installation>) -> Vec<Installation> {
     let mut result: Vec<Installation> = Vec::new();
     let mut identifiers = HashSet::new();

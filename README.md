@@ -26,7 +26,7 @@ Vos machines peuvent utiliser des chemins différents : chaque appareil associe 
 - **Votre progression à portée de main.** Synchronisez vos jeux manuellement ou activez le suivi en arrière-plan.
 - **Un historique pour revenir en arrière.** Consultez les révisions et republiez une ancienne version si nécessaire.
 - **Les conflits restent visibles.** Lorsque deux versions divergent, GameSync conserve une variante et vous laisse choisir comment résoudre le conflit.
-- **Moins de configuration.** Découvrez vos jeux Steam et, sous Windows, les installations Epic et GOG. Un manifeste Ludusavi local peut suggérer des dossiers de sauvegarde à confirmer.
+- **Moins de configuration.** Découvrez vos jeux Steam et, sous Windows, les installations Epic et GOG, ou analysez un dossier de jeux. Le catalogue Ludusavi est téléchargé automatiquement pour rechercher les dossiers de sauvegarde connus et les proposer dans le formulaire.
 - **Des transferts vérifiés.** Les fichiers sont contrôlés avec BLAKE3 et les transferts interrompus peuvent reprendre.
 
 ## 🚀 Bien démarrer

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CommunityApplications>
+  <Profile>GameSync provides an experimental self-hosted game save synchronization server and desktop clients. Report problems and request help through the project issue tracker.</Profile>
+  <Icon>https://raw.githubusercontent.com/MEHDImp4/GameSync/main/apps/desktop/src-tauri/icons/icon.png</Icon>
+  <WebPage>https://github.com/MEHDImp4/GameSync</WebPage>
+  <Forum>https://github.com/MEHDImp4/GameSync/issues</Forum>
+</CommunityApplications>

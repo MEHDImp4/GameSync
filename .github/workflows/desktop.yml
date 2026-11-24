@@ -125,3 +125,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify Docker deployment and persistent data
         run: bash server/tests/compose-smoke.sh
+      - name: Build and export the server image
+        run: |
+          docker build --tag gamesync-server:local -f server/Dockerfile .
+          docker save gamesync-server:local | gzip > gamesync-server-linux-amd64.tar.gz
+          sha256sum gamesync-server-linux-amd64.tar.gz > gamesync-server-linux-amd64.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gamesync-server-linux-amd64
+          path: |
+            gamesync-server-linux-amd64.tar.gz
+            gamesync-server-linux-amd64.tar.gz.sha256
+          if-no-files-found: error

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Container version="2">
+  <Name>GameSync</Name>
+  <Repository>ghcr.io/mehdimp4/gamesync-server:latest</Repository>
+  <Registry>https://github.com/MEHDImp4/GameSync/pkgs/container/gamesync-server</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <ExtraParams>--cap-drop=ALL --cap-add=CHOWN --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID</ExtraParams>
+  <Icon>https://raw.githubusercontent.com/MEHDImp4/GameSync/main/apps/desktop/src-tauri/icons/icon.png</Icon>
+  <Project>https://github.com/MEHDImp4/GameSync</Project>
+  <Support>https://github.com/MEHDImp4/GameSync/issues</Support>
+  <TemplateURL>https://raw.githubusercontent.com/MEHDImp4/GameSync/main/templates/gamesync.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/MEHDImp4/GameSync/main/docs/unraid.md</ReadMe>
+  <Overview>Experimental self-hosted server for synchronizing game saves between Windows and Linux computers. Choose an empty appdata directory and install the GameSync desktop client separately. Create the first pairing code from the container console as explained in the setup guide. The API uses HTTP: restrict access to a trusted network and use HTTPS through a reverse proxy or Tailscale Serve. Keep independent backups of your saves.</Overview>
+  <Category>Tools:Utilities</Category>
+  <Beta>true</Beta>
+  <License>MIT</License>
+  <Config Name="Server port" Target="8787" Default="8787" Mode="tcp" Description="HTTP API port. Restrict access and use HTTPS for clients." Type="Port" Display="always" Required="true" Mask="false">8787</Config>
+  <Config Name="Appdata" Target="/var/lib/gamesync" Default="/mnt/user/appdata/gamesync" Mode="rw" Description="Persistent server data. Choose a dedicated empty directory for a new installation." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/gamesync</Config>
+  <Config Name="Revisions to keep" Target="GAMESYNC_KEEP_COUNT" Default="20" Description="Initial retention count; an administrator can later change the saved server policy." Type="Variable" Display="advanced" Required="false" Mask="false">20</Config>
+  <Config Name="Retention days" Target="GAMESYNC_KEEP_DAYS" Default="30" Description="Initial retention age; an administrator can later change the saved server policy." Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
+</Container>

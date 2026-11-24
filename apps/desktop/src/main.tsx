@@ -1,8 +1,10 @@
 import { createRoot } from "react-dom/client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
+import { SquaresFour, GameController, Waveform, Devices, SlidersHorizontal, X, ArrowLeft, ArrowRight, FolderOpen, Plus } from "@phosphor-icons/react";
 import { labelsByLocale, type Locale } from "./locales";
 import "./style.css";
 
@@ -43,6 +45,12 @@ function mergeActivity(current: ActivityEvent[], incoming: ActivityEvent[]) {
     .slice(0, 200);
 }
 
+type NavIconName = "dashboard" | "library" | "activity" | "devices" | "settings";
+const navIcons = { dashboard: SquaresFour, library: GameController, activity: Waveform, devices: Devices, settings: SlidersHorizontal };
+function NavIcon({ name }: { name: NavIconName }) {
+  const Icon = navIcons[name];
+  return <Icon className="nav-icon" weight="duotone" aria-hidden="true" />;
+}
 function App() {
   const [config, setConfig] = useState<Config>();
   const [tab, setTab] = useState("dashboard");
@@ -68,6 +76,10 @@ function App() {
   const [linked, setLinked] = useState<RemoteGame>();
   const [rootCount, setRootCount] = useState(1);
   const [adding, setAdding] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [advancedLink, setAdvancedLink] = useState(false);
+  const wizard = useRef<HTMLDialogElement>(null);
+  const wizardForm = useRef<HTMLFormElement>(null);
   const [history, setHistory] = useState<History>();
   const [moreHistory, setMoreHistory] = useState(false);
   const game = config?.games.find(({ id }) => id === selected);
@@ -184,6 +196,35 @@ function App() {
     });
   }
 
+  useEffect(() => {
+    if (adding && wizard.current && !wizard.current.open) wizard.current.showModal();
+  }, [adding]);
+
+  function openWizard(item?: Installation, remote?: RemoteGame) {
+    setError(""); setMessage(""); setSuggestion(item); setLinked(remote);
+    setRootCount(item ? Math.max(1, Math.min(item.candidates.length, 16)) : 1);
+    setWizardStep(0); setAdvancedLink(false); setAdding(true);
+  }
+
+  function validateWizardStep() {
+    const current = wizardForm.current?.querySelector<HTMLElement>(`[data-wizard-step="${wizardStep}"]`);
+    for (const input of current?.querySelectorAll<HTMLInputElement>("input[required]") ?? []) {
+      if (!input.reportValidity()) return false;
+    }
+    return true;
+  }
+
+  function nextWizardStep() {
+    if (validateWizardStep()) setWizardStep((step) => Math.min(step + 1, 2));
+  }
+
+  async function choosePath(name: string, directory: boolean) {
+    try {
+      const selected = await open({ directory, multiple: false });
+      const field = wizardForm.current?.elements.namedItem(name);
+      if (selected && field instanceof HTMLInputElement) { field.value = selected; field.dispatchEvent(new Event("input", { bubbles: true })); }
+    } catch (reason) { setError(String(reason)); }
+  }
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -306,13 +347,13 @@ function App() {
   return (
     <Tabs.Root value={tab} onValueChange={setTab} className="shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark" aria-hidden="true">↻</span>GameSync</div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 8a7 7 0 0 1 11.6-2L20 12M4 12l2.8 6a7 7 0 0 0 11.6-2"/></svg></span><span>GameSync<small>DESKTOP</small></span></div>
         <Tabs.List className="navigation" aria-label={labels.navigation}>
-          <Tabs.Trigger value="dashboard">{labels.dashboard}</Tabs.Trigger>
-          <Tabs.Trigger value="library">{labels.library}</Tabs.Trigger>
-          <Tabs.Trigger value="activity">{labels.activity}</Tabs.Trigger>
-          <Tabs.Trigger value="devices">{labels.devices}</Tabs.Trigger>
-          <Tabs.Trigger value="settings">{labels.settings}</Tabs.Trigger>
+          <Tabs.Trigger value="dashboard"><NavIcon name="dashboard" /><span>{labels.dashboard}</span></Tabs.Trigger>
+          <Tabs.Trigger value="library"><NavIcon name="library" /><span>{labels.library}</span></Tabs.Trigger>
+          <Tabs.Trigger value="activity"><NavIcon name="activity" /><span>{labels.activity}</span></Tabs.Trigger>
+          <Tabs.Trigger value="devices"><NavIcon name="devices" /><span>{labels.devices}</span></Tabs.Trigger>
+          <Tabs.Trigger value="settings"><NavIcon name="settings" /><span>{labels.settings}</span></Tabs.Trigger>
         </Tabs.List>
         <div className="device-state"><span className={config?.server ? "paired" : ""} />{config?.server ? labels.paired : labels.pairingRequired}</div>
       </aside>
@@ -353,29 +394,47 @@ function App() {
         <Tabs.Content value="library">
           <header className="page-header">
             <div><h1>{labels.library}</h1><p>{labels.gamesSummary(config?.games.length ?? 0)}</p></div>
-            <button className="primary" onClick={() => { setSuggestion(undefined); setLinked(undefined); setRootCount(1); setAdding(!adding); }} disabled={busy}>{adding ? labels.closeForm : labels.addGame}</button>
+            <button className="primary" onClick={() => openWizard()} disabled={busy}><Plus size={16} weight="bold" aria-hidden="true" />{labels.addGame}</button>
           </header>
-          {adding && <form key={linked?.id ?? (suggestion ? `${suggestion.store}:${suggestion.store_id}` : "manual")} className="panel form" onSubmit={add}>
-            {linked ? <h2>{labels.linkGame(linked.title)}</h2> : <label>{labels.gameName}<input name="title" defaultValue={suggestion?.title} required /></label>}
-            {(linked?.roots ?? Array.from({ length: rootCount }, (_, index) => ({ id: String(index), label: index === 0 ? labels.saves : labels.folderNumber(index + 1) }))).map((root, index) => <fieldset className="root-form" key={root.id}>
-              {!linked && rootCount > 1 && <label>{labels.folderLabel}<input name={`label-${index}`} defaultValue={root.label} required /></label>}
-              {!linked && rootCount === 1 && <input type="hidden" name="label-0" value={root.label} />}
-              <label>{linked ? root.label : labels.saveFolder}<input name={`directory-${index}`} list="save-candidates" required /></label>
-            </fieldset>)}
-            {!linked && <div className="section-header">
-              <button type="button" disabled={busy || rootCount >= 16} onClick={() => setRootCount(rootCount + 1)}>{labels.addFolder}</button>
-              {rootCount > 1 && <button type="button" disabled={busy} onClick={() => setRootCount(rootCount - 1)}>{labels.removeFolder}</button>}
-            </div>}
-            <label>{labels.executablePath}<input name="executable" defaultValue={suggestion?.executable ?? ""} required /></label>
-            {suggestion && <p className="muted">{labels.detectedInstallation(suggestion.directory)}</p>}
-            <datalist id="save-candidates">{suggestion?.candidates.map((path) => <option value={path} key={path} />)}</datalist>
-            {!linked && rootCount === 1 && <details>
-              <summary>{labels.attachById}</summary>
-              <label>{labels.gameId}<input name="gameId" /></label>
-              <label>{labels.rootId}<input name="rootId" /></label>
-            </details>}
-            <button className="primary" disabled={busy}>{labels.saveGame}</button>
-          </form>}
+          {adding && <dialog ref={wizard} className="wizard-dialog" aria-labelledby="wizard-title" onClose={() => setAdding(false)} onCancel={() => setAdding(false)}>
+            <form ref={wizardForm} key={linked?.id ?? (suggestion ? `${suggestion.store}:${suggestion.store_id}` : "manual")} className="wizard" noValidate onSubmit={(event) => { if (wizardStep !== 2) { event.preventDefault(); nextWizardStep(); } else if (!validateWizardStep()) { event.preventDefault(); } else void add(event); }}>
+              <header className="wizard-header">
+                <div><p className="wizard-eyebrow">{labels.wizardStep(wizardStep + 1)}</p><h2 id="wizard-title">{linked ? labels.linkGame(linked.title) : labels.addGame}</h2></div>
+                <button type="button" className="icon-button" aria-label={labels.cancel} onClick={() => setAdding(false)}><X size={20} aria-hidden="true" /></button>
+              </header>
+              <ol className="wizard-progress" aria-label={labels.wizardProgress}>
+                {[labels.wizardGame, labels.wizardSaves, labels.wizardExecutable].map((label, index) => <li key={label} aria-current={wizardStep === index ? "step" : undefined} className={index < wizardStep ? "completed" : ""}><span>{index + 1}</span>{label}</li>)}
+              </ol>
+              {error && <p className="notice error" role="alert">{error}</p>}
+              <div className="wizard-body" data-wizard-step="0" hidden={wizardStep !== 0}>
+                <div><h3>{labels.wizardGameTitle}</h3><p className="muted">{labels.wizardGameHelp}</p></div>
+                {linked ? <p className="wizard-selected">{linked.title}</p> : <label>{labels.gameName}<input name="title" defaultValue={suggestion?.title} required /></label>}
+                {suggestion && <p className="path-hint">{labels.detectedInstallation(suggestion.directory)}</p>}
+                {!linked && rootCount === 1 && <div className="advanced-link">
+                  <button type="button" className="text-button" onClick={() => setAdvancedLink(!advancedLink)}>{labels.attachById}</button>
+                  {advancedLink && <div className="wizard-fields"><label>{labels.gameId}<input name="gameId" /></label><label>{labels.rootId}<input name="rootId" /></label></div>}
+                </div>}
+              </div>
+              <div className="wizard-body" data-wizard-step="1" hidden={wizardStep !== 1}>
+                <div><h3>{labels.wizardSavesTitle}</h3><p className="muted">{labels.wizardSavesHelp}</p></div>
+                {(linked?.roots ?? Array.from({ length: rootCount }, (_, index) => ({ id: String(index), label: index === 0 ? labels.saves : labels.folderNumber(index + 1) }))).map((root, index) => <fieldset className="root-form" key={root.id}>
+                  {!linked && rootCount > 1 && <label>{labels.folderLabel}<input name={`label-${index}`} defaultValue={root.label} required /></label>}
+                  {!linked && rootCount === 1 && <input type="hidden" name="label-0" value={root.label} />}
+                  <label>{linked ? root.label : labels.saveFolder}<span className="path-input"><input name={`directory-${index}`} list="save-candidates" defaultValue={linked ? "" : suggestion?.candidates[index] ?? ""} required /><button type="button" onClick={() => void choosePath(`directory-${index}`, true)} aria-label={labels.browseFolder}><FolderOpen size={18} aria-hidden="true" />{labels.browse}</button></span></label>
+                </fieldset>)}
+                <datalist id="save-candidates">{suggestion?.candidates.map((path) => <option value={path} key={path} />)}</datalist>
+                {!linked && <div className="wizard-folder-actions"><button type="button" disabled={busy || rootCount >= 16} onClick={() => setRootCount(rootCount + 1)}><Plus size={16} aria-hidden="true" />{labels.addFolder}</button>{rootCount > 1 && <button type="button" disabled={busy} onClick={() => setRootCount(rootCount - 1)}>{labels.removeFolder}</button>}</div>}
+              </div>
+              <div className="wizard-body" data-wizard-step="2" hidden={wizardStep !== 2}>
+                <div><h3>{labels.wizardExecutableTitle}</h3><p className="muted">{labels.wizardExecutableHelp}</p></div>
+                <label>{labels.executablePath}<span className="path-input"><input name="executable" defaultValue={suggestion?.executable ?? ""} required /><button type="button" onClick={() => void choosePath("executable", false)} aria-label={labels.browseFile}><FolderOpen size={18} aria-hidden="true" />{labels.browse}</button></span></label>
+              </div>
+              <footer className="wizard-footer">
+                {wizardStep > 0 ? <button type="button" onClick={() => setWizardStep(wizardStep - 1)}><ArrowLeft size={16} aria-hidden="true" />{labels.previous}</button> : <button type="button" onClick={() => setAdding(false)}>{labels.cancel}</button>}
+                {wizardStep < 2 ? <button type="button" className="primary" onClick={nextWizardStep}>{labels.next}<ArrowRight size={16} aria-hidden="true" /></button> : <button className="primary" disabled={busy}>{labels.saveGame}</button>}
+              </footer>
+            </form>
+          </dialog>}
           <section className="panel">
             <div className="library-filters">
               <label>{labels.searchGames}<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
@@ -396,16 +455,30 @@ function App() {
                 setDiscovered(true);
               })}>{labels.scanLibraries}</button>
             </div>
-            <details>
-              <summary>{labels.useLudusavi}</summary>
-              <label>{labels.manifestPath}<input value={catalog} onChange={(event) => setCatalog(event.target.value)} /></label>
-            </details>
+            <p className="muted">{labels.folderScanHelp}</p>
+            <button disabled={busy} onClick={() => void perform(async () => {
+              const directory = await open({ directory: true, multiple: false });
+              if (!directory) return;
+              const found = await invoke<Installation[]>("discover_folder", { directory, catalog: catalog.trim() || null });
+              setDetected((current) => {
+                const merged = new Map(current.map((item) => [item.directory.toLocaleLowerCase(), item]));
+                for (const item of found) {
+                  const key = item.directory.toLocaleLowerCase();
+                  const previous = merged.get(key);
+                  merged.set(key, previous ? { ...previous, executable: previous.executable ?? item.executable, candidates: [...new Set([...previous.candidates, ...item.candidates])] } : item);
+                }
+                return [...merged.values()].sort((a, b) => a.title.localeCompare(b.title));
+              });
+              setDiscovered(true);
+              return found.length ? labels.folderResults(found.length) : labels.noFolderGames;
+            })}>{labels.scanFolder}</button>
+
             {detected.filter((item) => item.title.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))).map((item) =>
               <div className="revision" key={`${item.store}:${item.store_id}`}>
                 <div><strong>{item.title}</strong><span>{item.store}{item.proton_prefix ? " · Proton" : ""}</span>
-                  <p>{item.candidates.length ? labels.locationsToConfirm(item.candidates.length) : labels.saveFolderRequired}</p>
+                  <p>{item.candidates.length ? labels.locationsToConfirm(item.candidates.length) : labels.saveFolderRequired}</p>{item.candidates.map((path) => <p className="muted" key={path}>{path}</p>)}
                 </div>
-                <button disabled={busy} onClick={() => { setSuggestion(item); setLinked(undefined); setRootCount(1); setAdding(true); }}>{labels.configure}</button>
+                <button disabled={busy} onClick={() => openWizard(item)}>{labels.configure}</button>
               </div>
             )}
             {discovered && detected.length === 0 && <p className="muted">{labels.noInstallations}</p>}
@@ -419,7 +492,7 @@ function App() {
             {remoteGames.filter((remote) => !config.games.some((local) => local.id === remote.id)).map((remote) =>
               <div className="revision" key={remote.id}>
                 <strong>{remote.title}</strong>
-                <button disabled={busy} onClick={() => { setLinked(remote); setSuggestion(undefined); setAdding(true); }}>{labels.attachDevice}</button>
+                <button disabled={busy} onClick={() => openWizard(undefined, remote)}>{labels.attachDevice}</button>
               </div>
             )}
             {!remoteGames.some((remote) => !config.games.some((local) => local.id === remote.id)) && <p className="muted">{labels.noRemoteGames}</p>}
@@ -557,6 +630,11 @@ function App() {
                 return enabled ? labels.startupEnabled : labels.startupDisabled;
               });
             }} />{labels.startOnLogin}</label>
+          </section>
+          <section className="panel form">
+            <h2>{labels.catalogSettings}</h2>
+            <p className="muted">{labels.catalogHelp}</p>
+            <label>{labels.manifestPath}<input value={catalog} onChange={(event) => setCatalog(event.target.value)} placeholder={labels.catalogAutomatic} /></label>
           </section>
           <button disabled={busy} onClick={() => void perform(() => invoke("quit"))}>{labels.quit}</button>
         </Tabs.Content>
