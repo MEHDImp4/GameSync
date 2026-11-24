@@ -1,0 +1,31 @@
+name: Publish tagged build
+on:
+  workflow_run:
+    workflows: [GameSync builds]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: gamesync-windows-x64
+          path: release-artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          gh release create "$RELEASE_TAG" release-artifacts/* --verify-tag --prerelease \
+            --title "GameSync $RELEASE_TAG — version de test" \
+            --notes 'Première version expérimentale. La recette native Windows et le déploiement sur Unraid restent à vérifier. Utilisez des données de test et conservez une copie indépendante de vos sauvegardes. Consultez le README pour l’installation.'
