@@ -6,22 +6,16 @@ on:
     paths:
       - 'apps/desktop/**'
       - 'crates/**'
-      - 'server/**'
-      - 'docker/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - '.dockerignore'
       - 'LICENSE'
       - '.github/workflows/desktop.yml'
   pull_request:
     paths:
       - 'apps/desktop/**'
       - 'crates/**'
-      - 'server/**'
-      - 'docker/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
-      - '.dockerignore'
       - 'LICENSE'
       - '.github/workflows/desktop.yml'
   workflow_dispatch:
@@ -65,7 +59,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev patchelf xvfb gnome-keyring dbus-x11
       - run: rustup update stable
-      - run: cargo +stable test --workspace --locked
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            apps/desktop/src-tauri -> target
+      - run: cargo +stable test --workspace --exclude gamesync-server --locked
       - name: Verify recovery after running out of disk space
         if: runner.os == 'Linux'
         run: |
@@ -138,27 +137,8 @@ jobs:
           path: release-artifacts/
           if-no-files-found: error
 
-  server:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify Docker deployment and persistent data
-        run: bash server/tests/compose-smoke.sh
-      - name: Build and export the server image
-        run: |
-          docker build --tag gamesync-server:local -f server/Dockerfile .
-          docker save gamesync-server:local | gzip > gamesync-server-linux-amd64.tar.gz
-          sha256sum gamesync-server-linux-amd64.tar.gz > gamesync-server-linux-amd64.tar.gz.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: gamesync-server-linux-amd64
-          path: |
-            gamesync-server-linux-amd64.tar.gz
-            gamesync-server-linux-amd64.tar.gz.sha256
-          if-no-files-found: error
-
   release:
-    needs: [desktop, server]
+    needs: desktop
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-22.04
     permissions:
@@ -167,6 +147,10 @@ jobs:
       group: release-${{ github.ref }}-${{ github.sha }}
       cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: gamesync-windows-x64
@@ -182,16 +166,26 @@ jobs:
           REF: ${{ github.ref }}
           REF_NAME: ${{ github.ref_name }}
           COMMIT: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
         run: |
           if [[ "$REF" == refs/tags/* ]]; then
             tag="$REF_NAME"
             [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || exit 1
             prerelease=()
             title="GameSync $tag"
+            base=$(git tag --merged "$COMMIT" --sort=-version:refname |
+              awk -v tag="$tag" '/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/ {
+                if (found) { print; exit }
+                if ($0 == tag) found = 1
+              }')
           else
             tag="beta-$COMMIT"
             prerelease=(--prerelease)
             title="GameSync bêta ${COMMIT:0:7}"
+            base="$BEFORE"
+            if ! git merge-base --is-ancestor "$base" "$COMMIT" 2>/dev/null; then
+              base=$(git rev-parse --verify --quiet "$COMMIT^" || true)
+            fi
           fi
           if gh release view "$tag" --json isDraft --jq '.isDraft' > release-state.txt 2>/dev/null; then
             if [[ "$(cat release-state.txt)" != true ]]; then
@@ -199,7 +193,20 @@ jobs:
               exit 0
             fi
           else
-            gh release create "$tag" --target "$COMMIT" --draft "${prerelease[@]}" --title "$title" --notes "Build du commit $COMMIT. Consultez le guide d'installation avant utilisation."
+            gh release create "$tag" --target "$COMMIT" --draft "${prerelease[@]}" --title "$title" --notes ""
           fi
+          range="$COMMIT"
+          if [[ -n "$base" ]]; then
+            range="$base..$COMMIT"
+          fi
+          {
+            printf '## Changements\n\n'
+            changes=$(git log --format='- %s (`%h`)' "$range")
+            printf '%s\n' "${changes:-Aucun nouveau commit dans cette version.}"
+            if [[ -n "$base" ]]; then
+              printf '\n[Voir le diff complet](%s/%s/compare/%s...%s)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$base" "$COMMIT"
+            fi
+            printf '\n[Guide d’installation](%s/%s/blob/%s/docs/install.md)\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$COMMIT"
+          } > release-notes.md
           gh release upload "$tag" windows/* linux/*.deb linux/*.AppImage linux/SHA256SUMS-* --clobber
-          gh release edit "$tag" --draft=false
+          gh release edit "$tag" --notes-file release-notes.md --draft=false

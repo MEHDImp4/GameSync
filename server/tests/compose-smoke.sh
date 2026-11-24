@@ -8,7 +8,12 @@ compose=(docker compose -p "$project" -f docker/compose.yaml)
 trap '"${compose[@]}" down -v; sudo rm -rf -- "$appdata"' EXIT
 url="http://127.0.0.1:$GAMESYNC_HOST_PORT"
 
-"${compose[@]}" up -d --build --wait
+case "${1:-}" in
+  "") build=--build ;;
+  --no-build) build=--no-build ;;
+  *) echo "Usage: $0 [--no-build]" >&2; exit 2 ;;
+esac
+"${compose[@]}" up -d "$build" --wait
 test_container=(docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID -v "$appdata:/var/lib/gamesync" gamesync-server:local)
 printf 'existing data' > "$appdata/existing"
 if "${test_container[@]}" invite --admin; then

@@ -29,7 +29,7 @@ Saisir ce code et l'adresse HTTPS du serveur dans le client desktop. Suivre ensu
 docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml up -d --build
 ```
 
-Pour utiliser l'image préconstruite sur un hôte Unraid x86-64, télécharger l'artefact `gamesync-server-linux-amd64` d'une exécution réussie du workflow **GameSync builds**, puis extraire l'archive de l'artefact GitHub. Depuis le dossier contenant les deux fichiers obtenus :
+Pour utiliser l'image préconstruite sur un hôte Unraid x86-64, télécharger l'artefact `gamesync-server-linux-amd64` d'une exécution réussie du workflow **Publish server image**, puis extraire l'archive de l'artefact GitHub. Depuis le dossier contenant les deux fichiers obtenus :
 
 ```sh
 sha256sum -c gamesync-server-linux-amd64.tar.gz.sha256
@@ -65,7 +65,7 @@ Le test de recréation du conteneur a réussi sur Docker local. La recette sur u
 ## Publier sur Community Apps
 
 1. Rendre le dépôt GitHub public, puis pousser les changements du modèle `templates/gamesync.xml`, du profil `ca_profile.xml`, du serveur et des workflows. La licence MIT est déjà à la racine. Vérifier que les URL du modèle, du profil et de l'icône sont accessibles sans connexion.
-2. Chaque push sur `main` lance automatiquement **Publish server image** : après les tests Docker, le workflow publie sur GHCR les tags `latest` et `sha-<commit>`. Vérifier le résultat dans l'onglet **Actions**. Un lancement manuel reste possible avec **Run workflow** en choisissant `main` ; une nouvelle exécution annule la précédente si elle est encore en cours.
+2. Un push sur `main` qui touche le serveur, Docker ou une dépendance Rust du serveur lance automatiquement **Publish server image**. Le workflow teste l'image puis publie les tags `latest` et `sha-<commit>` sur GHCR. Vérifier le résultat dans **Actions**. Un lancement manuel reste possible sur `main`.
 3. Dans les paramètres du package GitHub `gamesync-server`, rendre le package public si nécessaire. Vérifier anonymement que `ghcr.io/mehdimp4/gamesync-server:latest` peut être téléchargé. Si le propriétaire GitHub change, adapter les liens et la référence d'image dans le modèle.
 4. Installer le modèle et l'image sur un véritable serveur Unraid, choisir un dossier appdata dédié et vide et suivre la [recette](validation.md). Vérifier en particulier l'appairage, la persistance après recréation et les conflits avec deux clients. Tester également l'installation du client Windows depuis un artefact ou une version publiée.
 5. Ouvrir [Community Apps Submit](https://ca.unraid.net/submit), se connecter, démarrer une soumission et renseigner l'URL publique `https://github.com/MEHDImp4/GameSync`. Exécuter **Validate** puis **Scan**, examiner la fiche et résoudre les erreurs signalées avant de soumettre pour revue. Répéter ces contrôles après toute modification significative des fichiers XML.
