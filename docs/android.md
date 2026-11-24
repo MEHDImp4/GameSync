@@ -9,11 +9,14 @@ Cette procédure expérimentale utilise le téléphone comme serveur de sauvegar
 
 ```sh
 pkg update && pkg upgrade
-pkg install git rust clang make openssh
-git clone https://github.com/MEHDImp4/GameSync.git
+pkg install git gh rust clang make openssh
+gh auth login
+gh repo clone MEHDImp4/GameSync
 cd GameSync
 cargo build --release --locked -p gamesync-server
 ```
+
+Lors de `gh auth login`, choisir GitHub.com, HTTPS et l'authentification par navigateur avec le compte autorisé à accéder au dépôt privé.
 
 La compilation peut prendre du temps et ses besoins en mémoire varient selon le téléphone. Si elle échoue, conserver le message d'erreur pour le diagnostic. Utiliser le paquet Rust de Termux, pas rustup.
 
