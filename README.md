@@ -1,153 +1,101 @@
-# GameSync
+<div align="center">
 
-GameSync synchronise des sauvegardes de jeux entre des ordinateurs Windows et Linux à l’aide d’un serveur que vous hébergez vous-même. Le client desktop permet d’ajouter des jeux, de synchroniser leurs dossiers et de consulter les révisions et conflits.
+# 🎮 GameSync
 
-> **Version expérimentale** : la recette native Windows et le déploiement sur Unraid restent à vérifier. Commencez avec des données fictives et conservez une copie indépendante de vos sauvegardes.
+### Vos sauvegardes vous suivent, d’un PC à l’autre.
 
-## Fonctionnalités
+Jouez sur Windows ou Linux, retrouvez votre progression sur vos autres machines et gardez vos données chez vous grâce à un serveur auto-hébergé.
 
-- Synchronisation manuelle ou en arrière-plan, avec plusieurs dossiers de sauvegarde par jeu.
-- Historique des révisions, détection des conflits et possibilité de republier une version antérieure.
-- Découverte des jeux Steam, ainsi que des installations Epic et GOG sous Windows ; suggestions de dossiers via un manifeste Ludusavi local.
-- Serveur auto-hébergé, appairage des appareils et transferts reprenables avec vérification d’intégrité.
+[Installer GameSync](#-bien-démarrer) · [Découvrir les fonctionnalités](#-pensé-pour-vos-parties) · [Documentation](#-documentation) · [Développement](#-développement)
 
-## Bien démarrer
+</div>
 
-1. Déployez le serveur et créez un code d’appairage administrateur. Voir les instructions [Windows et Unraid](#installation-windows-et-serveur-unraid) ou le [guide Docker et Unraid](docs/unraid.md).
-2. Installez le client depuis les [versions GitHub](https://github.com/MEHDImp4/GameSync/releases) ou construisez-le en suivant le [guide d’installation](docs/install.md).
-3. Appairez le premier appareil, ajoutez un jeu de test et synchronisez-le. Appairez ensuite un second appareil pour retrouver le jeu.
+---
 
-Pour développer, consultez les sections [Développement](#développement) et [Client desktop](#client-desktop-en-développement). Les guides de [dépannage](docs/troubleshooting.md), d’[architecture](docs/architecture.md) et de [validation](docs/validation.md) détaillent le fonctionnement et les limites actuelles.
+> **Projet expérimental** — Le client et le serveur sont en cours de développement. Les tests graphiques ont été exécutés sous Linux et le serveur testé avec Docker ; la validation native sur Windows et le déploiement sur Unraid restent à effectuer. Commencez avec des sauvegardes fictives et gardez une copie indépendante de vos données.
 
-## État du dépôt
+## 🕹️ Une partie, plusieurs machines
 
-Le workspace Rust contient le modèle de manifeste, la validation des chemins portables, le scan local en lecture seule avec BLAKE3, la décision de synchronisation à trois états et le prédicat de rétention. Les tests utilisent des fichiers temporaires.
+Un jeu installé sur votre PC fixe et sur votre portable ? GameSync vous aide à retrouver vos sauvegardes sur les deux. Choisissez les dossiers à suivre, connectez vos appareils à votre serveur et lancez une synchronisation, manuellement ou en arrière-plan.
 
-Le stockage local conserve les objets par empreinte BLAKE3 et vérifie leur intégrité à la lecture. La capture retourne un manifeste dont les fichiers sont disponibles dans ce stockage. Le stockage doit être situé dans un dossier privé distinct des racines surveillées.
+Vos machines peuvent utiliser des chemins différents : chaque appareil associe les dossiers du jeu à ses propres emplacements. Un jeu peut contenir jusqu’à 16 dossiers de sauvegarde.
 
-Les révisions sont conservées dans SQLite. Une publication concurrente fondée sur une version dépassée préserve une variante sans déplacer la révision courante. Une ancienne version peut être republiée comme nouvelle révision.
+## ✨ Pensé pour vos parties
 
-La recette graphique a été exécutée sous Linux et le serveur a été testé avec Docker. La recette native sur Windows et le déploiement sur Unraid restent à vérifier. Sous Linux, le scan et les écritures parcourent les dossiers par descripteurs et refusent les liens symboliques. Les scans automatiques stables réutilisent les empreintes avec l’identité du fichier, la taille et ses horodatages de modification et de changement. Un scan complet reste requis avant une nouvelle décision de transfert et après trente minutes de réutilisation. Sous Windows, le moteur ouvre et retient les dossiers parents sans partager leur suppression et refuse les points de réanalyse. Ces protections attendent une validation native.
+- **Vos données, votre serveur.** Hébergez GameSync chez vous et appairez vos appareils avec un code à usage unique.
+- **Votre progression à portée de main.** Synchronisez vos jeux manuellement ou activez le suivi en arrière-plan.
+- **Un historique pour revenir en arrière.** Consultez les révisions et republiez une ancienne version si nécessaire.
+- **Les conflits restent visibles.** Lorsque deux versions divergent, GameSync conserve une variante et vous laisse choisir comment résoudre le conflit.
+- **Moins de configuration.** Découvrez vos jeux Steam et, sous Windows, les installations Epic et GOG. Un manifeste Ludusavi local peut suggérer des dossiers de sauvegarde à confirmer.
+- **Des transferts vérifiés.** Les fichiers sont contrôlés avec BLAKE3 et les transferts interrompus peuvent reprendre.
 
-Le moteur de restauration préserve les objets locaux, consigne les manifestes d’origine et de destination puis vérifie chaque écriture. Il reprend une application interrompue lorsque les fichiers correspondent encore à leur état d’origine ou à l’état attendu. Une modification indépendante interrompt la reprise. Après un arrêt brutal, le journal identifie le fichier de préparation et le retire uniquement si son contenu est un préfixe vérifié du fichier attendu. Un contenu inattendu est conservé et bloque la reprise. Le client vérifie le processus configuré avant d’appliquer une révision. Un lancement externe peut encore coïncider avec une opération déjà engagée.
+## 🚀 Bien démarrer
 
-Le moteur de synchronisation relie maintenant les opérations locales et l’API. Il persiste la révision de base, les intentions de publication et les applications en attente. Un conflit bloque la synchronisation du jeu en conservant sa variante sur le serveur. Le moteur peut conserver le conflit ouvert ou republier une variante ou une ancienne révision, avec sauvegarde locale préalable. Ces actions sont exposées dans le détail d’un jeu du client desktop.
+### 1. Préparez votre serveur
 
-## Développement
+Déployez le serveur avec Docker, puis créez un code d’appairage administrateur. Le [guide Docker et Unraid](docs/unraid.md) détaille les commandes, la persistance des données et l’accès HTTPS. Vous pouvez aussi suivre le [guide Android](docs/android.md) pour un serveur expérimental sous Termux.
+
+### 2. Installez le client
+
+Téléchargez l’installateur Windows depuis les [versions GitHub](https://github.com/MEHDImp4/GameSync/releases). Les builds de développement produisent également des paquets Debian et AppImage pour Linux. Consultez le [guide d’installation](docs/install.md) pour les paquets, la vérification des sommes SHA-256 et la compilation.
+
+L’installateur Windows de développement n’est pas signé et peut déclencher Microsoft SmartScreen. L’accès aux versions d’un dépôt privé nécessite un compte autorisé.
+
+### 3. Retrouvez vos sauvegardes
+
+1. Dans **Paramètres**, saisissez l’adresse HTTPS de votre serveur, le nom de l’appareil et le code d’appairage.
+2. Ajoutez un jeu de test et indiquez ses dossiers de sauvegarde et son exécutable.
+3. Fermez le jeu, puis synchronisez l’appareil qui possède la sauvegarde initiale.
+4. Appairez un second appareil, choisissez le jeu dans **Jeux sur le serveur** et renseignez ses chemins locaux.
+
+Pour un premier essai complet, suivez la [checklist de validation](docs/validation.md). Le client vérifie le processus configuré avant d’appliquer une révision ; un lancement externe peut toutefois coïncider avec une opération déjà engagée.
+
+## 🧭 Comment ça marche ?
+
+```text
+ PC Windows ou Linux       Votre serveur          PC Windows ou Linux
+┌───────────────────┐     ┌─────────────┐        ┌───────────────────┐
+│ Client GameSync   │ ◄─► │  GameSync   │ ◄────► │ Client GameSync   │
+│ Sauvegardes locales│     │ Révisions   │        │ Sauvegardes locales│
+└───────────────────┘     └─────────────┘        └───────────────────┘
+```
+
+Le serveur conserve les fichiers et les révisions ; chaque client garde ses chemins locaux et son jeton d’appareil. En cas de conflit, la synchronisation du jeu est mise en attente jusqu’à sa résolution. Les détails et les limites du protocole sont décrits dans l’[architecture](docs/architecture.md).
+
+## 📚 Documentation
+
+| Guide | Pour quoi faire ? |
+| --- | --- |
+| [Installation et mise à jour](docs/install.md) | Installer les clients, synchroniser un premier jeu et construire les paquets |
+| [Docker et Unraid](docs/unraid.md) | Déployer, administrer et sauvegarder le serveur |
+| [Android avec Termux](docs/android.md) | Essayer le serveur sur Android, sans application Android graphique |
+| [Dépannage](docs/troubleshooting.md) | Diagnostiquer les problèmes courants |
+| [Validation](docs/validation.md) | Tester Windows et Unraid avec des données fictives |
+| [Architecture](docs/architecture.md) | Comprendre le stockage, la synchronisation et leurs garanties |
+| [OpenAPI](server/openapi.yaml) | Explorer l’API du serveur, également servie sous `/openapi.yaml` |
+
+## 🛠️ Développement
+
+Le projet associe un serveur et des bibliothèques Rust à un client desktop Tauri, React et TypeScript.
 
 ```sh
+# Tester le workspace Rust
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
-```
 
-Le workflow GitHub Actions construit les clients Windows et Linux et teste le serveur lorsque les sources, les fichiers de build ou le workflow changent. Une modification limitée à la documentation ne déclenche pas ces builds. Les tags continuent de lancer le workflow, et il peut aussi être lancé manuellement depuis l’onglet Actions. Les installateurs et leurs sommes SHA-256 sont disponibles dans les artefacts du workflow.
-
-Le client Rust partagé prend en charge l’appairage, les révisions et les transferts reprenables avec vérification BLAKE3 sur disque. Un test lance le serveur et vérifie les publications concurrentes, la reprise d’un envoi après redémarrage et la récupération après corruption d’un transfert ou d’un téléchargement partiel.
-
-Le tableau de bord présente le stockage et les dernières publications du serveur. Le [contrat OpenAPI](server/openapi.yaml) est également servi sous `/openapi.yaml`.
-
-## Premier essai Windows et Android
-
-Pour un premier test, le serveur peut être compilé dans Termux sur Android et accessible au client Windows par un tunnel SSH. Cette méthode est expérimentale et attend une validation sur appareil réel ; elle ne fournit pas d’application Android graphique. Suivre le [guide Android](docs/android.md), puis la [recette Windows](docs/validation.md), en commençant par des données fictives et en conservant une copie indépendante des sauvegardes.
-
-## Installation Windows et serveur Unraid
-
-Cette première version est expérimentale : la recette sur Windows et Unraid reste à effectuer. Commencer avec des sauvegardes fictives et conserver une copie indépendante des sauvegardes réelles.
-
-### 1. Construire le serveur sur Unraid
-
-Dans le terminal Unraid (interface Web ou SSH), avec Docker et Docker Compose disponibles :
-
-```sh
-cd /mnt/user/appdata
-git clone https://github.com/MEHDImp4/GameSync.git gamesync-source
-cd gamesync-source
-git checkout v0.1.0
-install -d -o 10001 -g 10001 -m 0700 /mnt/user/appdata/gamesync
-docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml up -d --build
-```
-
-Le dépôt étant privé, le clonage HTTPS demande une authentification GitHub autorisée ; un mot de passe GitHub classique ne fonctionne pas. On peut aussi cloner avec SSH si la clé de l'hôte est autorisée. La première compilation peut prendre plusieurs minutes. Les données persistantes sont dans `/mnt/user/appdata/gamesync`, indépendamment du dossier source.
-
-Vérifier le serveur et créer le premier code d'appairage administrateur :
-
-```sh
-curl -fsS http://127.0.0.1:8787/healthz
-docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml logs --tail=100 gamesync
-docker compose -f docker/compose.yaml -f docker/compose.unraid.yaml exec gamesync gamesync-server invite --admin
-```
-
-Le port est volontairement accessible uniquement depuis Unraid. Pour connecter Windows, configurer Tailscale Serve ou un proxy HTTPS vers `http://127.0.0.1:8787`, puis utiliser l'adresse HTTPS obtenue dans le client. Le code est à usage unique et expire après dix minutes. Voir le [guide Unraid](docs/unraid.md) pour la sauvegarde du serveur et les autres commandes.
-
-### 2. Installer et appairer Windows
-
-1. Dans les [versions GitHub](https://github.com/MEHDImp4/GameSync/releases), télécharger l'installateur Windows `-setup.exe` de la version 0.1.0. L'accès nécessite un compte autorisé sur ce dépôt privé.
-2. Exécuter l'installateur, puis ouvrir GameSync depuis le menu Démarrer. L'installateur n'est pas signé et peut déclencher Microsoft SmartScreen.
-3. Dans **Paramètres**, saisir l'adresse HTTPS du serveur, un nom pour le PC et le code administrateur généré ci-dessus.
-4. Ajouter un jeu de test, indiquer son dossier de sauvegarde et son exécutable, fermer le jeu et lancer une synchronisation. Sur un second PC, appairer l'appareil avec un nouveau code, puis sélectionner le jeu depuis **Jeux sur le serveur**.
-
-Pour vérifier l'intégrité du téléchargement, comparer `Get-FileHash -Algorithm SHA256 .\nom-du-fichier-setup.exe` dans PowerShell avec le fichier `SHA256SUMS` joint à la version.
-
-## Serveur de développement
-
-```sh
+# Démarrer le serveur local sur 127.0.0.1:8787
 cargo run --locked -p gamesync-server
+
+# Démarrer le client desktop
+cd apps/desktop
+npm ci
+npm run tauri -- dev
 ```
 
-Le serveur écoute sur `127.0.0.1:8787`. `GAMESYNC_PORT` et `GAMESYNC_DATA` configurent le port et le dossier de données. `GET /healthz` est public. Les routes de stockage et de révision utilisent le jeton de l’appareil dans l’en-tête `Authorization: Bearer …`. Générer un code à usage unique valable dix minutes avec `cargo run --locked -p gamesync-server -- invite`. Utiliser `invite --admin` pour établir le premier appareil administrateur. Révoquer un appareil avec `cargo run --locked -p gamesync-server -- revoke UUID`. Utiliser le même dossier de données pour le serveur et ces commandes.
+Le serveur utilise `GAMESYNC_PORT` et `GAMESYNC_DATA` pour configurer son port et son répertoire de données. Pour créer le premier code administrateur, utilisez `cargo run --locked -p gamesync-server -- invite --admin` avec le même répertoire de données que le serveur. Les prérequis et commandes de construction sont détaillés dans le [guide d’installation](docs/install.md).
 
-| Méthode | Route | Opération |
-| --- | --- | --- |
-| GET | `/v1/devices` | Liste les appareils, leur rôle et leur dernière activité |
-| POST | `/v1/devices/invitations` | Génère un code ordinaire depuis un appareil administrateur |
-| DELETE | `/v1/devices/{id}` | Révoque un autre appareil depuis un appareil administrateur |
-| POST | `/v1/pair` | Échange `{code, name}` contre `{device, token}` |
-| PUT | `/v1/objects/{digest}` | Enregistre un fichier BLAKE3 à partir du corps brut |
-| GET | `/v1/objects/{digest}/{size}` | Lit un fichier après vérification de son intégrité |
-| GET | `/v1/games` | Liste les jeux enregistrés et les libellés de leurs dossiers |
-| PUT | `/v1/games/{game}` | Enregistre l’identité d’un jeu et ses racines, sans chemins locaux |
-| GET | `/v1/games/{game}/head` | Renvoie l’identifiant de la révision courante ou `null` |
-| POST | `/v1/games/{game}/head` | Publie `{request, base, manifest, resolves?}` et renvoie `{revision, conflict}` |
-| GET | `/v1/games/{game}/revisions?before={id}` | Liste jusqu’à 50 révisions précédant le curseur facultatif |
-| GET | `/v1/games/{game}/revisions/{id}` | Renvoie le manifeste, l’appareil et la date |
+Le workflow GitHub Actions construit les clients Windows et Linux et teste le serveur lorsque les sources, les fichiers de build ou le workflow changent. Une modification limitée à la documentation ne déclenche pas ces builds. Les tags et les lancements manuels déclenchent également le workflow ; les paquets et leurs sommes SHA-256 sont disponibles dans ses artefacts.
 
-Les envois reprenables acceptent des fichiers jusqu’à 1 Gio, par blocs de 8 Mio. Interroger `GET /v1/uploads/{digest}/{size}` pour obtenir le décalage, transmettre un bloc avec `PUT /v1/uploads/{digest}/{size}/{offset}`, puis vérifier `complete`. Chaque appareil peut avoir un envoi partiel en attente. `DELETE /v1/uploads` l’annule. Le téléchargement accepte `Range: bytes=N-`. Après compilation du serveur, `python3 server/tests/pairing.py` teste l’appairage et la révocation sur une instance temporaire.
+## Licence
 
-Voir le [guide Docker et Unraid](docs/unraid.md) pour le service conteneurisé.
-
-## Client desktop en développement
-
-Depuis `apps/desktop`, exécuter `npm ci` puis `npm run tauri -- dev`. Pour vérifier le frontend seul, lancer `npm run build`.
-
-Dans Paramètres, appairer le client à l’adresse du serveur. Le jeton est conservé par Secret Service sous Linux et par le Gestionnaire d’identifiants sous Windows. Le trousseau doit être disponible et déverrouillé.
-
-Ajouter un jeu avec le dossier de sauvegarde et le chemin de l’exécutable, puis synchroniser manuellement. Sur le second appareil, sélectionner le jeu dans **Jeux sur le serveur** et renseigner les chemins locaux. Un jeu peut associer jusqu’à seize dossiers de sauvegarde. Le serveur conserve les identifiants et libellés des dossiers. L’historique permet de republier une variante ou une version antérieure. Utiliser des dossiers de test pendant le développement.
-
-Dans Paramètres, activer la synchronisation en arrière-plan et régler l’intervalle des scans. Le moteur combine ces scans avec la surveillance des dossiers et réessaie après une erreur. L’activation est volontaire dans la version de développement. Le démarrage avec la session se règle séparément. Fermer la fenêtre laisse le moteur actif. Sur les bureaux Linux où l’icône de zone de notification n’est pas présumée accessible, la fenêtre est minimisée. Utiliser **Quitter GameSync** pour arrêter le processus.
-
-### Découverte des jeux
-
-La bibliothèque analyse Steam au démarrage et permet de répéter l’analyse après une installation. Les bibliothèques Steam secondaires et les préfixes Proton sont reconnus. Sous Windows, l’analyse consulte aussi les métadonnées du lanceur Epic et les clés d’installation GOG.
-
-Pour proposer des dossiers de sauvegarde, indiquer le chemin d’un manifeste YAML local dans **Jeux installés**, ou déposer le fichier sous le nom `ludusavi.yaml` dans le dossier de données du client. Le catalogue [Ludusavi Manifest](https://github.com/mtkennerly/ludusavi-manifest) est publié sous licence MIT. L’intégration actuelle propose les correspondances de type dossier étiquetées `save`. L’utilisateur confirme le dossier et l’exécutable avant tout suivi. Les règles de fichiers individuels, de registre et les motifs non pris en charge requièrent une configuration manuelle. L’application ne redistribue pas le catalogue dans cette version de développement.
-
-Voir le [guide d’installation et de mise à jour](docs/install.md) pour la construction et l’usage des paquets.
-
-
-### Recette graphique Linux
-
-Le test de bout en bout utilise le vrai serveur et deux instances Tauri avec des dossiers et trousseaux temporaires. Il nécessite une session graphique ou Xvfb, D-Bus et GNOME Keyring. Après le build frontend, exécuter depuis la racine du dépôt.
-
-```sh
-cargo build --locked -p gamesync-server
-cargo build --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features custom-protocol,desktop-smoke
-python3 apps/desktop/tests/smoke.py
-```
-
-Le test couvre l’appairage, le rattachement, l’aller-retour des sauvegardes, la conservation des fichiers pendant une panne serveur, la résolution d’un conflit, la protection pendant que le jeu est ouvert et l’affichage de l’activité. L’instrumentation est compilée uniquement dans les builds de test en mode debug.
-
-Voir aussi [l’architecture et les garanties du protocole](docs/architecture.md).
-
-Voir le [guide de dépannage](docs/troubleshooting.md).
-
-Voir la [checklist de recette Windows et Unraid](docs/validation.md).
+GameSync est distribué sous [licence MIT](LICENSE).
