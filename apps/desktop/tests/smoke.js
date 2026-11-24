@@ -80,8 +80,11 @@ async (input) => {
         );
         findButton("Rattacher à cet appareil", row).click();
       }
-      await waitFor(() => document.querySelector('input[name="directory-0"]'), "save directory field");
+      await click("Continuer");
+      await waitFor(() => document.querySelector('[data-wizard-step="1"]:not([hidden]) input[name="directory-0"]'), "save directory step");
       field("directory-0", input.directory);
+      await click("Continuer");
+      await waitFor(() => document.querySelector('[data-wizard-step="2"]:not([hidden]) input[name="executable"]'), "executable step");
       field("executable", input.executable);
       await click("Enregistrer le jeu");
       await status("Jeu ajouté");
