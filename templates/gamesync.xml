@@ -6,7 +6,7 @@
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <ExtraParams>--cap-drop=ALL --cap-add=CHOWN --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID</ExtraParams>
+  <ExtraParams>--cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID</ExtraParams>
   <Icon>https://raw.githubusercontent.com/MEHDImp4/GameSync/main/apps/desktop/src-tauri/icons/icon.png</Icon>
   <Project>https://github.com/MEHDImp4/GameSync</Project>
   <Support>https://github.com/MEHDImp4/GameSync/issues</Support>

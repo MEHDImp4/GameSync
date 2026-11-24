@@ -9,8 +9,15 @@ trap '"${compose[@]}" down -v; sudo rm -rf -- "$appdata"' EXIT
 url="http://127.0.0.1:$GAMESYNC_HOST_PORT"
 
 "${compose[@]}" up -d --build --wait
-docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
-  -v "$appdata:/var/lib/gamesync" gamesync-server:local invite --admin > /dev/null
+test_container=(docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID -v "$appdata:/var/lib/gamesync" gamesync-server:local)
+printf 'existing data' > "$appdata/existing"
+if "${test_container[@]}" invite --admin; then
+  echo 'Expected initialization to refuse a non-empty inaccessible directory' >&2
+  exit 1
+fi
+test "$(cat "$appdata/existing")" = 'existing data'
+rm "$appdata/existing"
+"${test_container[@]}" invite --admin > /dev/null
 test -n "$(sudo ls -A "$appdata")"
 invite=$("${compose[@]}" exec -T gamesync gamesync-server invite --admin)
 credentials=$(curl -fsS "$url/v1/pair" -H 'Content-Type: application/json' \
